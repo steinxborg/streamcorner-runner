@@ -1,0 +1,10 @@
+curl_cffi
+httpx
+bs4
+pycryptodome
+ua_generator
+pytz
+Faker
+python-dateutil
+rapidfuzz
+httpx[http2]
