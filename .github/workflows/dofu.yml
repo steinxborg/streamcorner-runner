@@ -1,4 +1,4 @@
-name: dofu
+name: dofu2
 on:
 #   schedule:
 #     - cron: "*/30 * * * *"
@@ -14,10 +14,10 @@ jobs:
   fetch_data:
     runs-on: ubuntu-latest
     env:
-      REPO_FOLDER: dofu-repo
-      SCRIPT_NAME: dofu.py
-      OUTPUT_FILE: dofu.json
-      ENRICHED_FILE: dofu-enriched.json
+      REPO_FOLDER: dofu2-repo
+      SCRIPT_NAME: dofu2.py
+      OUTPUT_FILE: dofu2.json
+      ENRICHED_FILE: dofu2-enriched.json
     
     steps:
       - uses: actions/checkout@v5
@@ -60,7 +60,7 @@ jobs:
             python $SCRIPT_NAME
             
             # Stage the new changes
-            git add $OUTPUT_FILE
+            git add $OUTPUT_FILE $ENRICHED_FILE
             
             # Check if there are changes after reset
             if git diff --cached --quiet; then
