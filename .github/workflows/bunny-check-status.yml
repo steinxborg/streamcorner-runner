@@ -1,8 +1,8 @@
 name: bunny-check-status
 
 on:
-  schedule:
-    - cron: "0 */9 * * *"
+  # schedule:
+  #   - cron: "0 */9 * * *"
   workflow_dispatch:
 
 # Prevent concurrent runs from interfering with each other
