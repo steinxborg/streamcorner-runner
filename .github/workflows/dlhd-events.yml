@@ -1,0 +1,92 @@
+name: dlhd-events
+on:
+#   schedule:
+#     - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+# Use workflow-specific concurrency group to prevent cancellation
+# GitHub cancels waiting scheduled runs if newer ones arrive with same group
+concurrency:
+  group: dlhd-events-repo-update  # Make this unique per workflow
+  cancel-in-progress: false
+
+jobs:
+  fetch_data:
+    runs-on: ubuntu-latest
+    env:
+      REPO_FOLDER: dlhd-events-repo
+      SCRIPT_NAME: dlhd-events.py
+      OUTPUT_FILE: dlhd-events.json
+      FILTERED_FILE: dlhd-events-filtered.json
+      ENRICHED_FILE: dlhd-events-enriched.json
+    
+    steps:
+      - uses: actions/checkout@v5
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Clone target repo
+        run: |
+          git clone https://${{ secrets.SCRAPER_TOKEN }}@github.com/${{ secrets.SCRAPER_REPO }} $REPO_FOLDER
+      
+      - name: Run Script, Commit and Push with Retry
+        run: |
+          cd $REPO_FOLDER
+          git config user.name "actions-user"
+          git config user.email "actions@github.com"
+          
+          # Detect default branch
+          DEFAULT_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+          
+          # Retry loop for push conflicts (up to 5 attempts)
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES"
+            
+            # Fetch latest remote state
+            git fetch origin $DEFAULT_BRANCH
+            
+            # Reset to latest remote (ensures clean state)
+            git reset --hard origin/$DEFAULT_BRANCH
+            
+            # Re-run the script to generate fresh data
+            python $SCRIPT_NAME
+            
+            # Stage the new changes
+            git add $OUTPUT_FILE $ENRICHED_FILE $FILTERED_FILE
+            
+            # Check if there are changes after reset
+            if git diff --cached --quiet; then
+              echo "No changes after sync with remote"
+              exit 0
+            fi
+            
+            git commit -m "Update $OUTPUT_FILE [${SCRIPT_NAME}-$(date -u +%Y%m%d-%H%M%S)]"
+            
+            # Try to push
+            if git push origin HEAD:$DEFAULT_BRANCH; then
+              echo "✓ Successfully pushed changes"
+              exit 0
+            fi
+            
+            # Push failed, increment counter and retry
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              # Add exponential backoff with jitter to avoid collisions
+              SLEEP_TIME=$((2 ** RETRY_COUNT + RANDOM % 5))
+              echo "Push failed, waiting ${SLEEP_TIME}s before retry..."
+              sleep $SLEEP_TIME
+            fi
+          done
+          
+          echo "✗ Failed to push after $MAX_RETRIES attempts"
+          exit 1
