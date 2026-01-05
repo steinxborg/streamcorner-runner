@@ -1,13 +1,15 @@
 name: ppv
 on:
-  # schedule:
-  #   - cron: "*/30 * * * *"
+#   schedule:
+#     - cron: "*/30 * * * *"
   workflow_dispatch:
+
 # Use workflow-specific concurrency group to prevent cancellation
 # GitHub cancels waiting scheduled runs if newer ones arrive with same group
 concurrency:
-  group: ppv-repo-update # Make this unique per workflow
+  group: ppv-repo-update  # Make this unique per workflow
   cancel-in-progress: false
+
 jobs:
   fetch_data:
     runs-on: ubuntu-latest
@@ -16,17 +18,22 @@ jobs:
       SCRIPT_NAME: ppv.py
       OUTPUT_FILE: ppv.json
       ENRICHED_FILE: ppv-enriched.json
+    
     steps:
       - uses: actions/checkout@v5
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
+      
       - name: Install dependencies
         run: pip install -r requirements.txt
+      
       - name: Clone target repo
         run: |
           git clone https://${{ secrets.SCRAPER_TOKEN }}@github.com/${{ secrets.SCRAPER_REPO }} $REPO_FOLDER
+      
       - name: Run Script, Commit and Push with Retry
         run: |
           cd $REPO_FOLDER
@@ -36,11 +43,13 @@ jobs:
           # Detect default branch
           DEFAULT_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
           
-          # Run the script ONCE before the retry loop
+          # Run the script ONCE and save output to temp location
           python $SCRIPT_NAME
+          mkdir -p /tmp/ppv-data
+          cp $OUTPUT_FILE $ENRICHED_FILE /tmp/ppv-data/ 2>/dev/null || true
           
           # Retry loop for push conflicts (up to 5 attempts)
-          MAX_RETRIES=10
+          MAX_RETRIES=5
           RETRY_COUNT=0
           
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -52,7 +61,11 @@ jobs:
             # Reset to latest remote (ensures clean state)
             git reset --hard origin/$DEFAULT_BRANCH
             
-            # Re-apply our generated files (they're still in the working directory)
+            # Restore files from temp location (don't re-run script)
+            cp /tmp/ppv-data/$OUTPUT_FILE $OUTPUT_FILE 2>/dev/null || true
+            cp /tmp/ppv-data/$ENRICHED_FILE $ENRICHED_FILE 2>/dev/null || true
+            
+            # Stage the new changes
             git add $OUTPUT_FILE $ENRICHED_FILE
             
             # Check if there are changes after reset
@@ -71,8 +84,8 @@ jobs:
             
             # Push failed, increment counter and retry
             RETRY_COUNT=$((RETRY_COUNT + 1))
+            
             if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-              # Add exponential backoff with jitter to avoid collisions
               SLEEP_TIME=$((2 ** RETRY_COUNT + RANDOM % 5))
               echo "Push failed, waiting ${SLEEP_TIME}s before retry..."
               sleep $SLEEP_TIME
