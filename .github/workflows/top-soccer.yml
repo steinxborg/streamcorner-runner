@@ -60,7 +60,7 @@ jobs:
             python $SCRIPT_NAME
             
             # Stage the new changes
-            git add $OUTPUT_FILE
+            git add $OUTPUT_FILE $ENRICHED_FILE
             
             # Check if there are changes after reset
             if git diff --cached --quiet; then
