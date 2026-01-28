@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REPO_FOLDER: para-hero-repo
-      SCRIPT_NAME: paramount_hero_scraper.py.py
+      SCRIPT_NAME: paramount_hero_scraper.py
       OUTPUT_FILE: paramount_hero.json
     
     steps:
